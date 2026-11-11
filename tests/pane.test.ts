@@ -12,17 +12,12 @@ test('the cards open one at a time on press, close on a second, and each draws i
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await mountPane($, surface)
     // Every card starts closed, its head saying how it stands.
-    for (const id of ['worktree', 'dials', 'context']) expect(await ui.find({ key: `body-${id}` }), surface).toBeUndefined()
-    expect((await ui.find({ key: 'tab-worktree-state' }))?.text, surface).toBe('Main checkout ›')
+    for (const id of ['dials', 'context']) expect(await ui.find({ key: `body-${id}` }), surface).toBeUndefined()
+    expect(await ui.find({ key: 'tab-worktree' }), surface).toBeUndefined()
     expect((await ui.find({ key: 'tab-dials-state' }))?.text, surface).toBe('Balanced ›')
     expect((await ui.find({ key: 'tab-context-state' }))?.text, surface).toBe('None yet ›')
 
-    await openCard(ui, 'worktree')
-    expect(await ui.find({ text: 'No slots kept. Create worktree now still works.' }), surface).toBeDefined()
-    expect(await ui.find({ type: 'Button', key: 'worktree-create' }), surface).toBeDefined()
-
     await openCard(ui, 'dials')
-    expect(await ui.find({ key: 'body-worktree' }), surface).toBeUndefined()
     expect(await ui.find({ key: 'preset-Balanced' }), surface).toBeDefined()
     expect(await ui.find({ text: /Plan steps/ }), surface).toBeDefined()
 
@@ -44,9 +39,11 @@ test('/fishstack, or /fs for short, opens the card it names: above the prompt wh
   await startSession($)
   const run = (command: string, args: string, isFullscreen = false) =>
     $.command.run({ command, args, origin: { kind: 'composer' }, presentation: { isFullscreen, columns: 200 } })
-  expect((await run('fs', 'nope')).text).toBe('No card named "nope". Try /fs worktree, dials, context or panel.')
-  // Alone, it opens the Worktree card when none was open before.
-  expect((await run('fs', '')).text).toBe('Opened fishStack · Worktree, above the prompt.')
+  expect((await run('fs', 'nope')).text).toBe('No card named "nope". Try /fs dials, context or panel.')
+  // Alone, it opens the Dials card when none was open before.
+  expect((await run('fs', '')).text).toBe('Opened fishStack · Dials, above the prompt.')
+  // The Worktree card is gone.
+  expect((await run('fs', 'worktree')).text).toBe('No card named "worktree". Try /fs dials, context or panel.')
   const opened = await run('fishstack', 'dials')
   expect(opened.text).toBe('Opened fishStack · Dials, above the prompt.')
   const band = await mountBand($, 'terminal')
@@ -90,7 +87,7 @@ test("the rail's cache gauge runs down for 5 minutes after a reply, then goes co
   expect(await cache()).toBe('Cache cold')
 })
 
-test('with no worktree news the band is a status rail whose items open their card under it', async ($, on) => {
+test('the band is a status rail whose items open their card under it', async ($, on) => {
   const { panes } = world(on, { isRepo: false })
   await startSession($)
   const band = await $.ui.mount({
@@ -102,7 +99,7 @@ test('with no worktree news the band is a status rail whose items open their car
   expect(await band.find({ type: 'Button', key: 'open-fishstack' })).toBeDefined()
   expect((await band.find({ key: 'rail-cache' }))?.text).toBe('Cache starts next reply')
   // The items say what each card's head says.
-  expect((await band.find({ type: 'Button', key: 'rail-worktree' }))?.text).toBe('⎇ Main checkout')
+  expect(await band.find({ type: 'Button', key: 'rail-worktree' })).toBeUndefined()
   expect((await band.find({ type: 'Button', key: 'rail-dials' }))?.text).toBe('◇ Balanced')
   expect((await band.find({ type: 'Button', key: 'rail-sources' }))?.text).toBe('▤ None yet')
   await band.press({ key: 'rail-dials' })
@@ -134,7 +131,7 @@ test('on the desktop each rail pill is a picture whose hover the surface lights 
   })
   // Each pill its own picture and press; its lit drawing and its caption wait
   // hidden, for the surface to reveal on hover: no hook, nothing moves.
-  expect(await keysOf(band, /^rail-.*-press$/)).toEqual(['rail-brand-press', 'rail-cache-press', 'rail-tokens-press', 'rail-dials-press', 'rail-sources-press', 'rail-worktree-press'])
+  expect(await keysOf(band, /^rail-.*-press$/)).toEqual(['rail-brand-press', 'rail-cache-press', 'rail-tokens-press', 'rail-dials-press', 'rail-sources-press'])
   const drawn = JSON.stringify(await band.drawn())
   // The tokens pill shows the cost alone; the tokens wait in its caption.
   expect(drawn).toContain('>≈ $0.42<')
@@ -143,7 +140,7 @@ test('on the desktop each rail pill is a picture whose hover the surface lights 
   // that pill and fills the caption row, which is always there.
   const lit = async () => {
     const tree = await band.drawn()
-    const hot = ['brand', 'cache', 'tokens', 'dials', 'sources', 'worktree'].filter(
+    const hot = ['brand', 'cache', 'tokens', 'dials', 'sources'].filter(
       id => (byKey(tree, `hot-rail-${id}-press`) as { props: { display: string } }).props.display === 'flex',
     )
     const caption = ((await band.find({ key: 'rail-caption' }))?.text ?? '').trim()
@@ -201,7 +198,7 @@ test('on the desktop the rail fits its one row: the least needed pills give up t
       props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns, scroll: { offset: 0, bodyRows: 10 }, view: {} },
     })
     const tree = await band.drawn()
-    const ids = ['brand', 'cache', 'tokens', 'dials', 'sources', 'worktree']
+    const ids = ['brand', 'cache', 'tokens', 'dials', 'sources']
     const svgs = ids.map(id => (byKey(tree, `drawn-rail-${id}-press`) as { children: { props: { source: string; width: number; height: number; alt: string } }[] }).children[0]!.props)
     const width = svgs.reduce((sum, svg) => sum + svg.width, 0) + (svgs.length - 1) * 7
     // Words beyond a count: the sources pill only ever has its number.
@@ -212,18 +209,24 @@ test('on the desktop the rail fits its one row: the least needed pills give up t
   // Wide: every pill keeps its words.
   const wide = await at(200)
   expect(wide.svgs[4]!.alt).toBe('Add files, links or notes')
-  // Slim: every pill under 25px tall, and all six whole fit 120 columns.
+  // Slim: every pill under 25px tall, and all five whole fit 120 columns.
   expect(Math.max(...wide.svgs.map(svg => svg.height))).toBeLessThanOrEqual(25)
-  expect((await at(120)).worded).toEqual({ brand: false, cache: false, tokens: true, dials: true, sources: false, worktree: true })
+  expect((await at(120)).worded).toEqual({ brand: false, cache: false, tokens: true, dials: true, sources: false })
   expect((await at(120)).width).toBeLessThanOrEqual((120 - 3) * 7)
-  expect(wide.worded).toEqual({ brand: false, cache: false, tokens: true, dials: true, sources: false, worktree: true })
+  expect(wide.worded).toEqual({ brand: false, cache: false, tokens: true, dials: true, sources: false })
   // About 560px: the row fits whole.
   const mid = await at(80)
   expect(mid.width).toBeLessThanOrEqual((80 - 3) * 7)
-  expect(mid.worded).toEqual({ brand: false, cache: false, tokens: true, dials: true, sources: false, worktree: true })
+  expect(mid.worded).toEqual({ brand: false, cache: false, tokens: true, dials: true, sources: false })
   const narrow = await at(55)
   expect(narrow.width).toBeLessThanOrEqual((55 - 3) * 7)
-  expect(narrow.worded).toEqual({ brand: false, cache: false, tokens: true, dials: false, sources: false, worktree: false })
+  // Four pills fit 55 columns with the Dials preset still worded.
+  expect(narrow.worded).toEqual({ brand: false, cache: false, tokens: true, dials: true, sources: false })
+  // Narrower, Dials gives up its words first.
+  const tiny = await at(46)
+  expect(tiny.width).toBeLessThanOrEqual((46 - 3) * 7)
+  expect(tiny.worded).toEqual({ brand: false, cache: false, tokens: true, dials: false, sources: false })
+  expect(tiny.svgs[3]!.alt).toBe('Dials: Balanced · tune how the agent works')
   expect(narrow.svgs[2]!.source).toContain('>≈ $0.42<')
   expect(narrow.svgs[2]!.alt).toBe('↑ 14.7M sent · ↓ 67.0k received · API list price, cache reads and writes included; not your bill')
   // An icon still says what it stands for when hovered.
@@ -295,7 +298,7 @@ test('each rail pill opens its own card under the rail, and the cache and cost o
   })
   const cardShown = async () => {
     await band.redraw()
-    for (const id of ['worktree', 'dials', 'context']) if ((await band.find({ key: `body-${id}` })) !== undefined) return id
+    for (const id of ['dials', 'context']) if ((await band.find({ key: `body-${id}` })) !== undefined) return id
     return 'none'
   }
   // The cache and the cost explain themselves on hover; a press opens nothing.
@@ -307,17 +310,16 @@ test('each rail pill opens its own card under the rail, and the cache and cost o
   expect(await cardShown()).toBe('dials')
   await activate(band, 'rail-sources-press')
   expect(await cardShown()).toBe('context')
-  await activate(band, 'rail-worktree-press')
-  expect(await cardShown()).toBe('worktree')
   // A pill pressed again closes its card.
-  await activate(band, 'rail-worktree-press')
+  await activate(band, 'rail-sources-press')
   expect(await cardShown()).toBe('none')
-  // The mark opens the Worktree card when none is open, and closes any that is.
+  // The mark opens the Dials card when none is open, and closes any that is.
   await activate(band, 'rail-brand-press')
-  expect(await cardShown()).toBe('worktree')
-  await activate(band, 'rail-dials-press')
+  expect(await cardShown()).toBe('dials')
+  await activate(band, 'rail-sources-press')
   await activate(band, 'rail-brand-press')
   expect(await cardShown()).toBe('none')
+  expect(await keysOf(band, /^rail-worktree/)).toEqual([])
   // None of it opens the pane.
   expect(panes).toEqual([])
 })
@@ -338,7 +340,7 @@ test('where the surface docks, the pane opens on the right by itself, the rail s
   expect(panes).toEqual(['fishstack'])
   await band.redraw()
   const keys = await keysOf(band, /^rail-.*-press$/)
-  for (const key of ['rail-brand-press', 'rail-cache-press', 'rail-dials-press', 'rail-sources-press', 'rail-worktree-press']) expect(keys).toContain(key)
+  for (const key of ['rail-brand-press', 'rail-cache-press', 'rail-dials-press', 'rail-sources-press']) expect(keys).toContain(key)
   // The Dials item opens its card in the pane, not under the rail.
   await activate(band, 'rail-dials-press')
   await band.redraw()
@@ -383,10 +385,23 @@ test('a Client fault is retried a minute later, twice at most; one that never lo
 // With its Client down the desktop rail is Buttons, and still one row: a
 // rail that wraps pushes the prompt down and reads as two.
 test('the desktop rail keeps one row while its Buttons stand in; the terminal may wrap', () => {
-  const figures = { isWorking: true, cacheSecondsLeft: 200, cachePercent: 90, tokens: { input: 12_700_000, output: 56_000 }, costUsd: 7.36, preset: 'Autopilot', presetLevels: [4, 3, 5, 5, 4, 2], sourcesOn: 0, sourcesTotal: 0, branch: 'kind-hermann-f2092f', preparingStep: null, autopilot: null, isDialsOn: true, isContextOn: true }
+  const figures = { isWorking: true, cacheSecondsLeft: 200, cachePercent: 90, tokens: { input: 12_700_000, output: 56_000 }, costUsd: 7.36, preset: 'Autopilot', presetLevels: [4, 3, 5, 5, 4, 2], sourcesOn: 0, sourcesTotal: 0, autopilot: null, isDialsOn: true, isContextOn: true }
   const element = (name: string) => (props: unknown) => ({ name, props })
   const table = { Box: element('Box'), Text: element('Text'), Button: element('Button'), Markdown: element('Markdown'), Code: element('Code'), Svg: element('Svg'), Client: element('Client') } as unknown as Ui
   const row = (surface: string) => drawRail(resolveUi(table, surface, true), figures, () => undefined, null, () => undefined, 120) as unknown as { props: Record<string, unknown> }
   expect(row('desktop').props).toMatchObject({ flexWrap: 'nowrap', overflow: 'hidden' })
   expect(row('terminal').props).toMatchObject({ flexWrap: 'wrap' })
+})
+
+test("the pane tabs are the surface's own buttons, with keys 1 and 2", async ($, on) => {
+  world(on, { isRepo: false })
+  await startSession($)
+  const ui = await mountPane($, 'desktop')
+  expect(await ui.find({ type: 'Client', key: 'tabs-click' })).toBeUndefined()
+  for (const [index, tab] of ['dials', 'context'].entries()) {
+    expect(await ui.find({ type: 'Button', key: `tab-${tab}` })).toMatchObject({ props: { hotkey: String(index + 1) } })
+  }
+  expect(await ui.find({ type: 'Button', key: 'tab-worktree' })).toBeUndefined()
+  await ui.press({ key: 'tab-dials' })
+  expect(await ui.find({ type: 'Button', key: 'dial-foresight' })).toBeDefined()
 })

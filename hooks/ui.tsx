@@ -34,10 +34,12 @@ export function resolveUi(table: Ui, surface: string, isClientDown: boolean): Ui
 }
 
 export const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'worktree', label: 'Worktree', icon: '⎇' },
   { id: 'dials', label: 'Dials', icon: '◇' },
   { id: 'context', label: 'Context', icon: '▤' },
 ]
+
+// The card the mark opens, and /fs with no name.
+export const DEFAULT_TAB: Tab = 'dials'
 
 export function isTab(value: string): value is Tab {
   return TABS.some(one => one.id === value)

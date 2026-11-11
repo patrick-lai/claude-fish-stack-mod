@@ -1,6 +1,6 @@
 // Where fishStack keeps a setting: per repository, so each repo has its own
-// dials, switches and worktree choices. A repository is its main checkout,
-// so a session in one of its worktrees reads what the main checkout set;
+// dials and switches. A repository is its main checkout, so a session in
+// one of its worktrees reads what the main checkout set;
 // outside git, the folder the session works in.
 import type { EngineInterface } from 'claude-code'
 
@@ -8,7 +8,7 @@ type $ = EngineInterface
 
 // The main checkout of the session's repository, or null outside one: the
 // folder holding the repository's .git, so a session working in a linked
-// worktree finds the same pool (and settings) as one in the main checkout.
+// worktree finds the same settings as one in the main checkout.
 export async function repoMain($: $): Promise<string | null> {
   const repo = await $.session.repo()
   if (repo === null) return null

@@ -1,7 +1,7 @@
 {
   "name": "fishstack",
-  "version": "0.8.4",
-  "description": "A fishStack pane for Claude Code: a perm worktree with a read-only head start, crew dials and a context library.",
+  "version": "0.9.0",
+  "description": "A fishStack pane for Claude Code: crew dials and a context library, with a status rail above the prompt.",
   "author": {
     "name": "Patrick Lai"
   },
@@ -10,30 +10,6 @@
   "repository": "https://github.com/patrick-lai/claude-fish-stack-mod",
   "types": "./types/index.d.ts",
   "userConfig": {
-    "autoWorktree": {
-      "type": "boolean",
-      "title": "Perm worktree",
-      "description": "Default for the Perm worktree toggle: keep slots ready, and give each worktree Claude Code creates a lasting slot, read-only until it is ready. A session started in a main checkout moves into one only when you press Create worktree now. Off leaves worktrees to Claude Code.",
-      "default": false
-    },
-    "worktreeRoot": {
-      "type": "string",
-      "title": "Worktree root",
-      "description": "Where worktree slots are kept. Empty keeps them in the repository's .claude/worktrees/fishstack/, where Claude Code enters them without asking.",
-      "default": ""
-    },
-    "setupCommand": {
-      "type": "string",
-      "title": "Setup command",
-      "description": "A shell command run in a new slot before the session moves in (say `pnpm install`). Empty runs nothing.",
-      "default": ""
-    },
-    "minFreeGb": {
-      "type": "number",
-      "title": "Free disk to keep (GB)",
-      "description": "Perm worktree stops warming new slots when less than this much disk is free, as CommissionAI does at 20 GB.",
-      "default": 20
-    },
     "autoAnswerMinutes": {
       "type": "number",
       "title": "Autopilot answers after (minutes)",

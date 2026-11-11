@@ -1,5 +1,5 @@
 // The desktop rail's pills, each its own picture: fishStack's mark, then
-// the prompt cache, tokens, dials, sources and worktree, each with its icon.
+// the prompt cache, tokens, dials and sources, each with its icon.
 // Every pill comes drawn twice, at rest and lit, so the surface can swap them
 // on hover without a round trip (rail.tsx), and with the caption it shows.
 import type { Tab } from '../types'
@@ -32,9 +32,6 @@ export type RailArtFigures = {
   presetLevels: number[]
   sourcesOn: number
   sourcesTotal: number
-  branch: string | null
-  // While the worktree is made, the step it is on; null once ready or off.
-  preparingStep: string | null
   autopilot: RailAutopilot | null
   // The Use dials and Use context switches: off, their pills say Off.
   isDialsOn: boolean
@@ -106,11 +103,6 @@ function pages(x: number, y: number): string {
   return `<g transform="translate(${x} ${y})" fill="none" stroke-width="1.3" stroke-linejoin="round"><rect x="3.5" y="0.7" width="9" height="11" rx="1.6" stroke="#5cc8e8" stroke-opacity="0.5"/><rect x="1" y="2.7" width="9" height="11" rx="1.6" stroke="#5cc8e8" fill="rgba(92,200,232,0.14)"/><path d="M3.2 6.4h4.6M3.2 8.8h3.2" stroke="#5cc8e8" stroke-linecap="round"/></g>`
 }
 
-function branch(x: number, y: number, isOn: boolean, isPreparing = false): string {
-  const color = isPreparing ? '#f0a35e' : isOn ? '#3fb950' : 'var(--dim)'
-  return `<g transform="translate(${x} ${y})" fill="none" stroke="${color}" stroke-width="1.4" stroke-linecap="round"><circle cx="3.5" cy="2.5" r="1.8"/><circle cx="3.5" cy="12" r="1.8"/><circle cx="11" cy="4.5" r="1.8"/><path d="M3.5 4.3v5.9M11 6.3c0 3-3.2 2.8-6.3 4.2"/></g>`
-}
-
 // Autopilot's wait in the radar's place: a ring that runs down as the
 // question waits, amber like a timer; then a check, once it has answered.
 function waitRing(x: number, y: number, share: number): string {
@@ -127,7 +119,7 @@ function answeredMark(x: number, y: number): string {
 // The pills that can give up their words for the rail to fit one row, in the
 // order they do, down to their icon. The mark (always alone), the cache
 // gauge, the cost and the sources count (always its icon and number) never do.
-export const COMPACTABLE = ['worktree', 'dials'] as const
+export const COMPACTABLE = ['dials'] as const
 export type Compactable = (typeof COMPACTABLE)[number]
 
 export function railArt(figures: RailArtFigures, iconOnly: ReadonlySet<Compactable> = new Set()): RailPill[] {
@@ -220,17 +212,6 @@ export function railArt(figures: RailArtFigures, iconOnly: ReadonlySet<Compactab
     const width = 12 + 14 + 7 + textWidth(count, 12.5, true) + 14
     const caption = !isOn ? 'Context is off: no source reaches the agent' : figures.sourcesTotal === 0 ? 'Add files, links or notes' : `${figures.sourcesOn} of ${figures.sourcesTotal} sources reach the agent`
     pill('sources', width, 'context', caption, left => `<g opacity="${isOn ? 1 : 0.45}">${pages(left + 12, mid - 7.5)}</g><text x="${left + 12 + 14 + 7}" y="${mid + 4.4}" font-family="${SANS}" font-size="12.5"><tspan font-weight="${isOn ? 650 : 500}" fill="${isOn ? 'var(--text)' : 'var(--dim)'}">${count}</tspan></text>`)
-  }
-
-  {
-    const preparing = figures.preparingStep
-    const label = preparing !== null ? 'Preparing' : (figures.branch ?? 'No worktree')
-    const isLit = preparing !== null || figures.branch !== null
-    const isIcon = iconOnly.has('worktree')
-    const width = isIcon ? 12 + 14 + 12 : 12 + 14 + 7 + textWidth(label, 12.5, isLit) + 14
-    const caption = preparing !== null ? `Read-only until the worktree is ready · ${preparing}` : figures.branch === null ? 'No worktree for this session' : `Working in worktree ${figures.branch}`
-    const icon = (left: number) => branch(left + 12, mid - 7, figures.branch !== null, preparing !== null)
-    pill('worktree', width, 'worktree', caption, left => isIcon ? icon(left) : `${icon(left)}<text x="${left + 12 + 14 + 7}" y="${mid + 4.4}" font-family="${SANS}" font-size="12.5" font-weight="${isLit ? 600 : 500}" fill="${isLit ? 'var(--text)' : 'var(--dim)'}">${escape(label)}</text>`, preparing !== null ? ' wait' : '')
   }
 
   return pills

@@ -1,36 +1,10 @@
-export type Tab = 'worktree' | 'dials' | 'context'
-
-export type WorktreePhase = 'off' | 'preparing' | 'ready' | 'failed'
-
-export type WorktreeStep = { label: string; at: number; isWarning: boolean }
-
-export type Worktree = {
-  phase: WorktreePhase
-  step: string
-  steps: WorktreeStep[]
-  main: string | null
-  path: string | null
-  branch: string | null
-  base: string | null
-  baseSha: string | null
-  error: string | null
-}
+export type Tab = 'dials' | 'context'
 
 // Autopilot's answer for a person who is away, as the rail shows it: a
 // question waiting until its deadline, then what was picked for it.
 export type AutopilotWait =
   | { kind: 'waiting'; since: number; deadline: number; picked: string; count: number }
   | { kind: 'answered'; at: number; picked: string; waitedMs: number }
-
-export type Slot = {
-  path: string
-  branch: string | null
-  isLeased: boolean
-  isMine: boolean
-  // While the pool makes it: what it is doing now; null once it is ready.
-  setup: string | null
-  isRemoving: boolean
-}
 
 export type DialKey = 'foresight' | 'crew' | 'tenacity' | 'autonomy' | 'proof' | 'voice'
 
@@ -72,12 +46,6 @@ declare module 'claude-code' {
     'fishstack': {
       // Which card of the pane is open; null with all of them closed.
       tab: Tab | null
-      worktree: Worktree
-      slots: Slot[]
-      poolNote: string
-      // The slot whose Remove waits for a second press, by path.
-      slotAsk: string | null
-      elsewhere: string | null
       railTick: number
       // Why fishStack refused each recent tool call, by its tool_use_id.
       refusals: Record<string, string>
@@ -88,15 +56,6 @@ declare module 'claude-code' {
       isContextOn: boolean
       lastReplyAt: number | null
       tokenTotals: { input: number; output: number; cacheRead?: number; cacheWrite?: number } | null
-      isStepsShown: boolean
-      isSlotsShown: boolean
-      isHeadStartPrompted: boolean
-      // A terminal session in the main checkout was asked where it works:
-      // once per session, so a reload does not ask again.
-      isWhereAsked: boolean
-      // Where the session moved mid-turn with no head start told: the note the
-      // agent is owed at its next batch or prompt.
-      owedMoveNote: string | null
       toldStyle: string | null
       dials: DialValues
       selectedDial: DialKey | null

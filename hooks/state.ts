@@ -1,10 +1,10 @@
-// What several files share and none owns: the starting dials and worktree,
+// What several files share and none owns: the starting dials,
 // the presets, and what each card's head says while closed. It imports no
 // other hook file, so any of them can import it.
 import { atom, read } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 
-import type { DialKey, DialValues, Tab, Worktree } from '../types'
+import type { DialKey, DialValues, Tab } from '../types'
 
 export const BALANCED: DialValues = { foresight: 3, crew: 3, tenacity: 3, autonomy: 3, proof: 3, voice: 3 }
 
@@ -22,20 +22,6 @@ export function presetName(values: DialValues): string {
   return preset?.name ?? 'Custom'
 }
 
-export const IDLE_WORKTREE: Worktree = {
-  phase: 'off',
-  step: '',
-  steps: [],
-  main: null,
-  path: null,
-  branch: null,
-  base: null,
-  baseSha: null,
-  error: null,
-}
-
-const worktree = atom({ plugin: 'fishstack', key: 'worktree' } as const, IDLE_WORKTREE)
-const elsewhere = atom({ plugin: 'fishstack', key: 'elsewhere' } as const, null)
 const dials = atom({ plugin: 'fishstack', key: 'dials' } as const, BALANCED)
 const isDialsOn = atom({ plugin: 'fishstack', key: 'isDialsOn' } as const, true)
 const autopilot = atom({ plugin: 'fishstack', key: 'autopilot' } as const, null)
@@ -46,7 +32,6 @@ export type Head = { value: string; tone?: 'success' | 'warning' | 'error' }
 
 // Each card's state in a word or two, coloured when it wants a look.
 export async function paneHeads($: EngineInterface): Promise<Record<Tab, Head>> {
-  const state = await read($, worktree)
   const isDials = await read($, isDialsOn)
   const values = await read($, dials)
   const auto = isDials && values.autonomy === 5 ? await read($, autopilot) : null
@@ -54,14 +39,6 @@ export async function paneHeads($: EngineInterface): Promise<Record<Tab, Head>> 
   const on = list.filter(one => one.mode !== 'off').length
   const minutes = auto?.kind === 'waiting' ? Math.max(1, Math.ceil((auto.deadline - (await $.clock.now())) / 60_000)) : 0
   return {
-    worktree:
-      state.phase === 'ready'
-        ? { value: state.branch ?? 'Worktree', tone: 'success' }
-        : state.phase === 'preparing'
-          ? { value: 'Preparing…', tone: 'warning' }
-          : state.phase === 'failed'
-            ? { value: 'Failed', tone: 'error' }
-            : { value: (await read($, elsewhere)) !== null ? 'Its own worktree' : 'Main checkout' },
     dials: !isDials
       ? { value: 'Off' }
       : auto?.kind === 'waiting'

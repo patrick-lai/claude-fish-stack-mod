@@ -4,7 +4,7 @@
 // HTML page for a look at the layout.
 import { expect, test } from 'claude-code/testing'
 
-import { activate, keysOf, mountPane, openCard, openPool, startSession, world } from './world'
+import { activate, keysOf, mountPane, openCard, startSession, world } from './world'
 
 declare const console: { log: (...args: unknown[]) => void }
 
@@ -54,9 +54,6 @@ test('every card draws on the desktop with content in it', async ($, on) => {
   await ui.press({ key: 'dial-tenacity' })
   await show(ui, 'dials')
 
-  await openCard(ui, 'worktree')
-  await show(ui, 'worktree-off')
-
   await $.turn.complete({ turnId: 't1', answer: 'done', durationMs: 1_000, reason: 'answer', isAborted: false, usage: { input_tokens: 1_200, output_tokens: 3_400, cache_read_input_tokens: 48_000, cache_creation_input_tokens: 2_100, model: 'claude-opus-5-5' } } as never)
   const band = await $.ui.mount({
     plugin: 'fishstack',
@@ -78,36 +75,6 @@ test('every card draws on the desktop with content in it', async ($, on) => {
     props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 70, scroll: { offset: 0, bodyRows: 10 }, view: {} },
   })
   await show(narrow, 'rail-narrow')
-})
-
-test('the worktree card draws its steps and slots on the desktop', { options: { autoWorktree: true } }, async ($, on) => {
-  const { clock } = world(on)
-  await startSession($)
-  const ui = await mountPane($, 'desktop')
-  await openPool(ui)
-  await show(ui, 'worktree-preparing')
-  await clock.advance(1)
-  await show(ui, 'worktree-ready')
-})
-
-test('the worktree card draws a slot setting up and a Remove waiting for its second press', { options: { autoWorktree: true, worktreeRoot: '/slots', setupCommand: 'pnpm install' } }, async ($, on) => {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('/repo'))
-  const dir = `/slots/repo-${[...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 6)}`
-  const { clock } = world(on, {
-    slots: [1, 2, 3].map(n => `${dir}/${n}`),
-    store: { [`lease:${dir}/1`]: { sessionId: 'someone-else', beatAt: 1_000_000 } },
-    isSetupHeld: true,
-  })
-  await $.session.start({ cwd: '/other/wt', surface: 'desktop', isInteractive: true })
-  await clock.advance(1)
-  const ui = await mountPane($, 'desktop')
-  await openPool(ui)
-  await activate(ui, 'pool-add')
-  await clock.advance(1)
-  await activate(ui, `slot-remove-${dir}/3`)
-  await ui.redraw()
-  expect(await ui.find({ type: 'Button', key: 'slot-remove-confirm' })).toBeDefined()
-  await show(ui, 'worktree-pool-edit')
 })
 
 test('the rail on Autopilot: a question waiting, then answered for the person', async ($, on) => {

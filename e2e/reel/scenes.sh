@@ -3,7 +3,7 @@
 # 140x38 tmux pane on a fresh copy of the end-to-end fixture: each scene is a
 # folder of captures that render.mjs turns into a GIF.
 #
-#   e2e/reel/scenes.sh [scene...]     # pool claim dials context autopilot
+#   e2e/reel/scenes.sh [scene...]     # dials context autopilot
 #   e2e/reel/media.sh                 # then draw them into docs/media
 set -euo pipefail
 
@@ -16,7 +16,7 @@ frames="$here/out"
 export TMUX_TMPDIR="$frames/tmux"
 mkdir -p "$TMUX_TMPDIR"
 media="$repo/docs/media"
-scenes=("${@:-pool claim dials context autopilot}")
+scenes=("${@:-dials context autopilot}")
 read -r -a scenes <<< "${scenes[*]}"
 
 c() { python3 -I "$repo/e2e/tmuxctl.py" "$@"; }
@@ -91,42 +91,13 @@ BALANCED='{"foresight": 3, "crew": 2, "tenacity": 3, "autonomy": 3, "proof": 3, 
 QUICK='{"foresight": 1, "crew": 1, "tenacity": 2, "autonomy": 4, "proof": 2, "voice": 2}'
 AUTOPILOT='{"foresight": 4, "crew": 3, "tenacity": 5, "autonomy": 5, "proof": 4, "voice": 2}'
 
-FISH_SETUP_SECONDS=2 "$repo/e2e/setup.sh" > /dev/null
+"$repo/e2e/setup.sh" > /dev/null
 mv "$FISH_E2E/app" "$FISH_E2E/workshop-api"
 app="$FISH_E2E/workshop-api"
 sed -i '' 's/"autoAnswerMinutes": 0.1/"autoAnswerMinutes": 1/g' "$FISH_E2E/settings.json"
-store "{\"autoWorktree\": false, \"dials\": $QUICK}"
+store "{\"dials\": $QUICK}"
 
 has() { [[ " ${scenes[*]} " == *" $1 "* ]]; }
-
-if has pool; then
-  echo 'pool: the toggle warms three slots'
-  launch; ready
-  c type demo '/fishstack worktree'
-  c wait demo 'Off: fishStack' 15
-  sleep 1
-  rec_start pool
-  sleep 1.5
-  c click demo '[ On ]' 2
-  approve_until 'screen | grep -q "Pool: 3 slots, 3"' 120
-  rec_stop 3
-  quit
-fi
-
-if has claim; then
-  echo 'claim: a new session moves into a warm slot'
-  store '{"autoWorktree": true}'
-  launch
-  rec_start claim
-  ready
-  # Keys typed while the session moves into its slot are dropped: ask after.
-  approve_until 'screen | grep -q "⎇ fish/"' 90
-  sleep 2
-  c type demo 'In one sentence, what does server.js serve?'
-  sleep 2
-  c idle demo 120
-  rec_stop 3
-fi
 
 if has dials; then
   echo 'dials: presets, one dial, the brief'

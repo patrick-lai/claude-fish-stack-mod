@@ -1,5 +1,5 @@
-// What every session loads, and what the model is told: the read-only head
-// start, the dials' working style and the context library's enabled sources.
+// What every session loads, and what the model is told: the dials' working
+// style and the context library's enabled sources.
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, PluginOptions, PromptComposeSection, Timer } from 'claude-code'
 
@@ -8,14 +8,11 @@ import { CONTEXT_ON_KEY, CONTEXT_SECTION_ID, contextSection, legacyStoreKey, lib
 import { BALANCED, brief, DIALS_ON_KEY, DIALS_SECTION_ID, DIALS_STORE_KEY, ENFORCE_KEY, isDialValues } from './dials'
 import { FISH_COMMANDS } from './pane'
 import { getSetting, settingsHome } from './settings'
-import { headStartNote, IDLE_WORKTREE, isReadOnlyPhase, MID_TURN_FROM } from './worktree'
+import { MID_TURN_FROM, unwireOldWorktrees } from './band'
 
 const dials = atom({ plugin: 'fishstack', key: 'dials' } as const, BALANCED)
 const folders = atom({ plugin: 'fishstack', key: 'folders' } as const, [])
 const sources = atom({ plugin: 'fishstack', key: 'sources' } as const, [])
-const worktree = atom({ plugin: 'fishstack', key: 'worktree' } as const, IDLE_WORKTREE)
-const isHeadStartPrompted = atom({ plugin: 'fishstack', key: 'isHeadStartPrompted' } as const, false)
-const owedMoveNote = atom({ plugin: 'fishstack', key: 'owedMoveNote' } as const, null)
 const toldStyle = atom({ plugin: 'fishstack', key: 'toldStyle' } as const, null)
 const isDialsOn = atom({ plugin: 'fishstack', key: 'isDialsOn' } as const, true)
 const isContextOn = atom({ plugin: 'fishstack', key: 'isContextOn' } as const, true)
@@ -47,15 +44,8 @@ function styleUpdate(style: string, isMidTurn = false): string {
   return `${from} What follows replaces the Working style and Project context sections of your system prompt.\n\n${style}`
 }
 
-// The move note owed, once: whoever takes it tells the agent.
-async function takeMoveNote($: EngineInterface): Promise<string | null> {
-  const owed = await read($, owedMoveNote)
-  if (owed !== null) await update($, owedMoveNote, () => null)
-  return owed
-}
-
-// fishStack was Craftshop, whose saved dials, context libraries, slot leases
-// and Perm worktree switch sit in its own store file. The first session after
+// fishStack was Craftshop, whose saved dials, context libraries and other
+// settings sit in its own store file. The first session after
 // the rename copies them in, once, never over a value fishStack already has.
 // The plugin's name before the rename, which its store files start with.
 const FORMER_NAME = 'craft-shop'
@@ -250,7 +240,7 @@ export function registerSession(on: On, options: PluginOptions): void {
 
   on('session.start', async ($, e, next) => {
     // The commands first, so /fishstack answers from the first keystroke, not
-    // after the worktree claim and the store reads below.
+    // after the store reads below.
     for (const command of FISH_COMMANDS) await $.command.register(command)
     // Before the rest of the chain, so every later hook reads what came over
     // from Craftshop's store.
@@ -259,14 +249,14 @@ export function registerSession(on: On, options: PluginOptions): void {
     await update($, isClientDown, () => false)
     const started = await next(e)
     await loadSaved($)
+    await unwireOldWorktrees($)
     const kept = (await $.store.get(AUTOPILOT_STORE_KEY)) as AutopilotKept | null | undefined
     if (kept?.sessionId === (await $.session.id()) && (await read($, autopilot)) === null) await update($, autopilot, () => kept.answered)
     return started
   })
 
   // A /clear starts the state over with no session.start: the session after
-  // it gets the dials and the library back from the store (worktree.tsx
-  // carries the worktree over).
+  // it gets the dials and the library back from the store.
   on('classic.SessionStart', { source: 'clear' }, async ($, e, next) => {
     const done = await next(e)
     await loadSaved($)
@@ -302,13 +292,6 @@ export function registerSession(on: On, options: PluginOptions): void {
       await $.store.set(AUTOPILOT_STORE_KEY, null)
     }
     const notes: string[] = []
-    const { phase, main } = await read($, worktree)
-    if (isReadOnlyPhase(phase) && main !== null) {
-      notes.push(headStartNote(main))
-      await update($, isHeadStartPrompted, () => true)
-    }
-    const moved = await takeMoveNote($)
-    if (moved !== null) notes.push(`fishStack update: ${moved}`)
     const told = await read($, toldStyle)
     const style = await styleNow($)
     if (told !== null && told !== style) {
@@ -328,13 +311,6 @@ export function registerSession(on: On, options: PluginOptions): void {
     const done = await next(e)
     if (e.agent_id !== undefined) return done
     const notes: string[] = []
-    const { phase, main } = await read($, worktree)
-    if (isReadOnlyPhase(phase) && main !== null && !(await read($, isHeadStartPrompted))) {
-      notes.push(headStartNote(main, true))
-      await update($, isHeadStartPrompted, () => true)
-    }
-    const moved = await takeMoveNote($)
-    if (moved !== null) notes.push(`${MID_TURN_FROM}${moved}`)
     const told = await read($, toldStyle)
     const style = await styleNow($)
     if (told !== null && told !== style) {

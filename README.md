@@ -5,7 +5,7 @@
 <h1 align="center">fishStack</h1>
 
 <p align="center">
-  <b>A Claude Code plugin: a worktree for every session, a working style you set once,<br>
+  <b>A Claude Code plugin: a working style you set once,<br>
   and notes the agent always reads.</b>
 </p>
 
@@ -21,17 +21,15 @@
 
 If you run Claude Code all day, a few things keep getting in the way:
 
-- **Sessions trip over each other.** Two agents in one checkout edit the same files, and a fresh worktree has no `node_modules`.
 - **You keep repeating yourself.** "Write a spec first." "Don't ask, just decide." "Run the tests." You type it every session.
 - **The agent forgets what matters.** API conventions, the design doc, the ticket: pasted in again and again.
 
-fishStack adds a status rail above the prompt, inside the chat: the prompt cache's heat bar, the cost, and where the agent works and how (`⎇ fish/abcdef`, `◇ Balanced`, `▤ 3 of 4 on`). Click one of those three to open its card: on the right, beside Claude Code's own panel, where the app docks one; otherwise right under the rail, above the prompt. Each card starts with its switch (**Use worktrees**, **Use dials**, **Use context**), so you can turn any of them off.
+fishStack adds a status rail above the prompt, inside the chat: the prompt cache's heat bar, the cost, and how the agent works (`◇ Balanced`, `▤ 3 of 4 on`). Click either to open its card: on the right, beside Claude Code's own panel, where the app docks one; otherwise right under the rail, above the prompt. Each card starts with its switch (**Use dials**, **Use context**), so you can turn either off.
 
 Every setting is kept per repository: the switches, **Enforce**, the dials, and the context library. A worktree shares its main checkout's settings; outside git, the folder has its own. A repository that hasn't set something yet starts from the value you had before settings were per repository.
 
 | Card | What it does |
 | - | - |
-| **[Worktrees](#worktrees)** | A new session can move into a worktree of its own, already set up, typically in about three seconds. |
 | **[Dials](#dials)** | Six dials set how the agent plans, delegates, persists, asks, proves and talks. Some levels are enforced in code, not only asked for. |
 | **[Context](#context)** | Notes, links and files the agent reads in every request. Mark one Strict and the agent treats it as ground truth. |
 
@@ -58,59 +56,9 @@ npx -y fishstack-mod install
 npx -y fishstack-mod uninstall
 ```
 
-Restart Claude Code. The rail shows above the prompt. In the desktop app (and a terminal in fullscreen mode at 110 columns or more) the three cards also open on the right by themselves, beside Claude Code's own panel; click a rail item, or type **`/fs dials`** (or `/fishstack dials`), to open that card there. Anywhere the cards can't sit on the right, a card opens under the rail, above the prompt.
+Restart Claude Code. The rail shows above the prompt. In the desktop app (and a terminal in fullscreen mode at 110 columns or more) the cards also open on the right by themselves, beside Claude Code's own panel; click a rail item, or type **`/fs dials`** (or `/fishstack dials`), to open that card there. Anywhere the cards can't sit on the right, a card opens under the rail, above the prompt.
 
-fishStack is built and tested on macOS: copy-on-write cloning and the file pickers use macOS tools.
-
-## Worktrees
-
-<p align="center">
-  <img src="docs/media/claim.gif" width="100%" alt="Real Claude Code in a terminal: a new session claims a warm slot, moves in on its own branch, and answers a question">
-</p>
-
-Turn on **Use worktrees** and fishStack keeps slots ready: worktrees of their own, each on a `fish/…` branch, kept around to reuse. A session never moves into one by itself. It works where it started, in your main checkout, until you press **Create worktree now** in the Worktree card. Then it gets a branch from the latest origin, read-only for the few seconds until it moves in. Your main checkout stays untouched. It is off until you turn it on.
-
-It's fast because the work happens before you need it:
-
-- **A warm pool.** fishStack keeps a pool of slots in the background (three to start, with one always free), each checked out, with dependencies in place and your setup command already run. A session you move takes one and moves in. In the run above that took about three seconds from launch. The card's **Pool** line opens the list of every slot: **+ Add slot** grows the pool, and a new slot shows up straight away as *setting up* with the step it is on, until it's ready. **Remove** (a second press confirms) takes a free slot out, and the pool stays that size from then on (it still keeps one free for the next session).
-- **A head start.** While the slot is prepared, the agent can already read, search and plan. Anything that writes waits until it has moved in.
-- **No copying.** `node_modules` is cloned copy-on-write (APFS), so a slot costs almost no disk until something changes.
-- **Nothing lost.** A slot is reused once its session ends. Anything left uncommitted is saved under `refs/fish/backup/` first.
-- **The default branch stays free.** Git lets only one worktree have a branch at a time, so a worktree on `main` (or `master`) locks the main checkout out of its own default branch. Inside a fishStack worktree, the guard refuses `git switch` or `git checkout` onto the default branch and points to `origin/<default>` instead (`git switch -c <branch> origin/main`). A slot that still ends its session on the default branch is detached as it is released.
-
-It works with Claude Code's own worktrees too. `claude --worktree feat-x` lands in a slot on `fish/feat-x`. In the desktop app, its worktree option decides. Ticked, the session stays in the worktree the app made and fishStack leaves it alone, so the app's diff, PR and archive keep following it. Unticked, the session stays in the main checkout (**Create worktree now** claims a slot).
-
-### The desktop app, with no checkout
-
-In a big repository the desktop's own worktree is the slow part: a full checkout for every session, and it refuses to make one at all with less free disk than 2.5 times the repository's git pack. Give the desktop the pool's slots instead. Its `WorktreeCreate` hook then takes the slot fishStack keeps offered (clean, detached, dependencies in place), holds it for the session, checks out the session's branch from origin and hands it over. The desktop tracks that slot as the session's worktree, so its diff, PR and archive follow it. When the desktop removes the worktree, the hold goes and the slot returns to the pool. With no slot offered, the hook makes a new one, as slow as the desktop's own.
-
-It sets itself up. The first session in a repository with **Use worktrees** on keeps the hook beside the repository's git data (`.git/fishstack/`) and wires it into the repository's `.claude/settings.local.json`, your own settings for it, kept out of git (added to the repository's local `info/exclude` if nothing ignores it). Everything else in that file stays, a toast says it happened, and turning **Use worktrees** off takes fishStack's entries out again. A file that doesn't parse, or a `WorktreeCreate` hook of your own there, is left alone.
-
-Every Claude Code client in the repository reads those settings, so the hook decides at each call who it is for:
-
-| Caller | Gets |
-| - | - |
-| The desktop app, fishStack enabled, **Use worktrees** on | A slot from the pool |
-| The CLI with fishStack | A slot: fishStack answers its worktree creation itself, before the hook  |
-| Anything else: ACP, the SDK, the CLI without fishStack | The worktree Claude Code makes itself, `.claude/worktrees/<name>` on `worktree-<name>` from origin's default branch |
-| Any client once fishStack is disabled or **Use worktrees** is off | Claude Code's own worktree, and the hook takes its entries out of the settings |
-
-The desktop runs the hook only for a session a person starts, so a fork or a session Claude starts in that repository gets no worktree. A hook replaces `.worktreeinclude`, so those files aren't copied. `e2e/desktop-hook.sh` checks the hook against a throwaway repository.
-
-<p align="center">
-  <img src="docs/media/worktree-desktop.png" width="760" alt="The Worktrees tab in the desktop app: Use worktrees on, the pool's status, this session's slot and branch, and the slots list">
-</p>
-
-<details>
-<summary><b>How a slot is made</b></summary>
-
-1. **Fetch.** `git fetch origin <default>`. If that fails, it starts from the local branch and says so.
-2. **Claim.** Under a per-repository lock (an atomic `mkdir`, broken after 30 s if its holder died), it takes the slot this session already holds (a retry), an idle slot, or makes the next one. A new slot is `git worktree add --detach --no-checkout`, then `reset --hard` with `core.checkStat=minimal`, then an index warm-up. A used slot is scrubbed: uncommitted work goes to `refs/fish/backup/<slot>-<time>`, then `reset --hard`, `clean -fd` (ignored files such as `node_modules` stay) and `checkout -B fish/<name>`. The name is the session's id, or the Claude Code worktree it was adopted from; if a branch by that name already exists (Claude Code reuses a worktree folder for a new session), the slot gets `fish/<name>-<session id>` instead, so no other session's branch is ever reset. Git hooks never run on these writes.
-3. **Seed.** Each missing `node_modules` (up to six folders deep) is cloned with `cp -c` into a staging folder, then renamed into place. The source is an idle sibling slot with the same lockfiles, or else the main checkout. Then `setupCommand` runs, unless this slot already ran it with these lockfiles.
-4. **Move in.** The session enters the slot (`EnterWorktree`) as soon as it is ready, even mid-turn. The agent always knows where it is: a head start that began after the prompt (an app attaching late) is told after its next tool call, and so is a move it was not warned of. Slots live under the repository's `.claude/worktrees/`, where Claude Code keeps its own, so the move needs no confirming. Set `worktreeRoot` elsewhere and Claude Code asks you to confirm each move.
-
-A slot being made is marked in the store, so every session lists it as setting up and none claims it half made. Removing a slot leases it first, saves anything uncommitted under `refs/fish/backup/`, then moves it out of the pool and deletes it; its branch stays. The pool stops warming when free disk drops under `minFreeGb` (20 GB), and the card says why. During the head start, the guard refuses Edit, Write, MultiEdit, NotebookEdit and ExitPlanMode. It also refuses any shell command that is not a known read (`ls`, `cat`, `rg`, read-only `git`, `sed -n` and the like). A redirect anywhere but `/dev/null` counts as a write.
-</details>
+fishStack is built and tested on macOS: the file pickers use macOS tools.
 
 ## Dials
 
@@ -182,16 +130,15 @@ Libraries are kept per repository and reach the agent as a **Project context** s
 
 ## The rail
 
-The rail is one row of pills above the prompt, and it stays one row at any window width. In the desktop app, hover a pill for details (nothing shifts). Click Dials, Context or Worktree to open that card, docked on the right.
+The rail is one row of pills above the prompt, and it stays one row at any window width. In the desktop app, hover a pill for details (nothing shifts). Click Dials or Context to open that card, docked on the right.
 
 | Pill | Shows |
 | - | - |
-| **Mark** | Opens the Worktree card, or closes the open one. |
+| **Mark** | Opens the Dials card, or closes the open one. |
 | **Cache** | The prompt cache. Five bars run down over the five minutes after a reply. While any are lit, your next message reuses the cache, so it's faster and cheaper. Hover for the hit rate: the last reply's and the whole session's share of input read from the cache, from the token counts Claude reports. |
 | **Cost** | Claude Code's own `/cost` total at API list prices, cache reads and writes included. It isn't your plan's bill. Tokens in and out on hover. |
 | **Dials** | The preset, or Off. Amber while Autopilot waits to answer for you, green once it has. |
 | **Context** | How many sources are on, or Off. |
-| **Worktree** | Where this session works: its branch, **Preparing…**, or the main checkout. |
 
 In the terminal the rail is plain text, and the same items open the same cards.
 
@@ -201,16 +148,18 @@ Set them in `/config`. They're stored under `pluginConfigs["fishstack"].options`
 
 | Option | Default | What it does |
 | - | - | - |
-| `autoWorktree` | `false` | Use worktrees' starting value (keep slots ready). Once you flip the switch in a repository, your choice sticks there. |
-| `worktreeRoot` | empty | Where slots live. Empty: `<repo>/.claude/worktrees/fishstack/<n>`, added to the repository's local `info/exclude` if nothing ignores it yet. Set: `<root>/<repo>-<hash>/<n>`, and Claude Code asks before each move in. |
-| `setupCommand` | empty | Runs in a new slot before the session moves in, `pnpm install` say. Times out after 10 minutes. |
-| `minFreeGb` | `20` | The pool stops warming below this much free disk. |
 | `autoAnswerMinutes` | `15` | How long Autopilot waits before answering for you. |
 
 <details>
 <summary><b>Coming from Craftshop?</b></summary>
 
-fishStack was called Craftshop. Its first session copies what Craftshop saved (dials, context libraries, the worktrees switch) into its own store, once, and never over anything fishStack already holds. Options set under `pluginConfigs["craft-shop"]` don't carry over, so set them again in `/config`.
+fishStack was called Craftshop. Its first session copies what Craftshop saved (dials, context libraries, switches) into its own store, once, and never over anything fishStack already holds. Options set under `pluginConfigs["craft-shop"]` don't carry over, so set them again in `/config`.
+</details>
+
+<details>
+<summary><b>Used the Worktree card before 0.9?</b></summary>
+
+fishStack 0.9 dropped worktrees; Claude Code's own `--worktree` and the desktop's worktree option are unaffected. The first session in a repository that had **Use worktrees** on takes fishStack's `WorktreeCreate` and `WorktreeRemove` entries out of `.claude/settings.local.json` (everything else there stays) and switches off the old desktop hook. Slots already made stay where they were, under `.claude/worktrees/fishstack/`, with their `fish/…` branches: remove the ones you don't need with `git worktree remove <path>`.
 </details>
 
 ## Develop
@@ -230,11 +179,11 @@ e2e/reel/scenes.sh            # record this README's terminal scenes from real C
 e2e/reel/media.sh             # draw every picture in docs/media
 ```
 
-`e2e/drive.sh` checks every feature as a person would, against a fixture repository: the pool warms, a session claims a slot and its writes land there, the next session reuses it with a backup, dials (mid-turn too) and a Strict note reach the agent, Autopilot answers an unanswered question, and `claude --worktree` comes up in a slot.
+`e2e/drive.sh` checks every feature as a person would, against a fixture repository: dials (mid-turn too) and a Strict note reach the agent, and Autopilot answers an unanswered question.
 
 The README's media come from two places:
 
-- **Terminal GIFs** (`claim`, `autopilot`, `context`): real Claude Code with this plugin, recorded in tmux by `e2e/reel/scenes.sh`.
+- **Terminal GIFs** (`autopilot`, `context`): real Claude Code with this plugin, recorded in tmux by `e2e/reel/scenes.sh`.
 - **Desktop pictures** (`rail`, `dials`, the two panes): the desktop's own UI trees, drawn by the tests in `tests/media.test.ts` and `tests/desktop.test.ts` and laid out as the desktop pane. These are close to the app's own paint, not screenshots of it.
 
 ## The mark

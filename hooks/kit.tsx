@@ -206,12 +206,6 @@ export function folderArt(count: number, sharedCount: number, width: number, hei
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${pages}${body}${badge}</svg>`
 }
 
-// A branch forking off a trunk, for the Worktree tab's empty state.
-export function branchArt(width: number, height: number): string {
-  const c = '#8f9cff'
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 120 64"><path d="M20 52V12" stroke="#9aa1ab" stroke-opacity="0.55" stroke-width="3" stroke-linecap="round"/><path d="M20 40c0-14 18-14 40-14h22" fill="none" stroke="${c}" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 7"/><circle cx="20" cy="12" r="6" fill="#9aa1ab" fill-opacity="0.5"/><circle cx="20" cy="52" r="6" fill="#9aa1ab" fill-opacity="0.5"/><rect x="84" y="14" width="26" height="24" rx="6" fill="${c}" fill-opacity="0.18" stroke="${c}" stroke-width="2"/><path d="M92 26h10M97 21v10" stroke="${c}" stroke-width="2" stroke-linecap="round"/></svg>`
-}
-
 // Three request rows, for the API log's empty state.
 export function requestsArt(width: number, height: number): string {
   const rows = [
@@ -317,7 +311,7 @@ export const ON_OFF = [
   { value: 'on', label: 'On' },
 ] as const
 
-// A tab's own on/off switch, its name beside it: "Use worktrees", "Use dials".
+// A tab's own on/off switch, its name beside it: "Use dials".
 export function useSwitch(ui: Ui, key: string, name: string, isOn: boolean, onChange: (isOn: boolean) => void) {
   const { Box, Text } = ui
   return (

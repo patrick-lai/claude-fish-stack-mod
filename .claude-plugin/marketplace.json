@@ -4,13 +4,13 @@
     "name": "Patrick Lai"
   },
   "metadata": {
-    "description": "fishStack: a Claude Code mod with a perm worktree head start, crew dials and a context library."
+    "description": "fishStack: a Claude Code mod with crew dials and a context library."
   },
   "plugins": [
     {
       "name": "fishstack",
       "source": "./",
-      "description": "Perm worktree head start, crew dials and a context library in one fishStack pane."
+      "description": "Crew dials and a context library in one fishStack pane."
     }
   ]
 }

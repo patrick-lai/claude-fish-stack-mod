@@ -43,11 +43,11 @@ const LIBRARY = {
   folders: [],
 }
 
-test('media: the rail, from a reply to an answer Autopilot gave', { options: { autoWorktree: true } }, async ($, on) => {
+test('media: the rail, from a reply to an answer Autopilot gave', async ($, on) => {
   const { clock } = world(on, { store: { dials: AUTOPILOT, 'context:/repo': LIBRARY } })
   on('turn.complete', ($, e) => ({ text: e.answer }))
   await startSession($)
-  // The session in its slot, its first reply in: the band gives way to the rail.
+  // The session's first reply in.
   await clock.advance(1)
   await $.turn.complete(TURN as never)
   const band = await mountBand($, 'desktop')
@@ -63,9 +63,9 @@ test('media: the rail, from a reply to an answer Autopilot gave', { options: { a
   await clock.advance(30_000)
   await point('sources', null)
   await show(band, 'media-rail-2')
-  await point('worktree', 'sources')
+  await point('tokens', 'sources')
   await show(band, 'media-rail-3')
-  await point(null, 'worktree')
+  await point(null, 'tokens')
   const pending = $.tool.call({ tool: 'AskUserQuestion', questions: [{ question: 'Which port?', header: 'Port', multiSelect: false, options: [{ label: '4517 (Recommended)', description: '' }, { label: '8080', description: '' }] }] } as never)
   await clock.advance(MINUTE)
   await point('dials', null)

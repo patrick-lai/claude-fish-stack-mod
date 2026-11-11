@@ -4,7 +4,7 @@ import type { CommandSpec, EngineInterface, On } from 'claude-code'
 import type { Tab } from '../types'
 import { hoverHandlers, pressHandlers } from './kit'
 import { paneHeads } from './state'
-import { frame, isTab, PANE, PANE_COLUMNS, PANE_TITLE, resolveUi, TABS } from './ui'
+import { DEFAULT_TAB, frame, isTab, PANE, PANE_COLUMNS, PANE_TITLE, resolveUi, TABS } from './ui'
 import type { Ui } from './ui'
 
 const tab = atom({ plugin: 'fishstack', key: 'tab' } as const, null)
@@ -14,8 +14,8 @@ const isClientDown = atom({ plugin: 'fishstack', key: 'isClientDown' } as const,
 // fish shell. Where the surface docks a pane the card shows in it, on the
 // right; elsewhere under the rail, above the prompt. /fs panel opens the pane.
 export const FISH_COMMANDS: CommandSpec[] = [
-  { name: 'fishstack', description: 'Open a fishStack card above the prompt: worktree, dials or context', argumentHint: '[worktree|dials|context|panel]' },
-  { name: 'fs', description: 'Open a fishStack card (short for /fishstack)', argumentHint: '[worktree|dials|context|panel]' },
+  { name: 'fishstack', description: 'Open a fishStack card above the prompt: dials or context', argumentHint: '[dials|context|panel]' },
+  { name: 'fs', description: 'Open a fishStack card (short for /fishstack)', argumentHint: '[dials|context|panel]' },
 ]
 
 async function openCard($: EngineInterface, args: string, isDocking: boolean): Promise<{ text: string }> {
@@ -25,9 +25,9 @@ async function openCard($: EngineInterface, args: string, isDocking: boolean): P
     return { text: 'Opened the fishStack panel.' }
   }
   if (wanted !== '' && !isTab(wanted)) {
-    return { text: `No card named "${wanted}". Try /fs worktree, dials, context or panel.` }
+    return { text: `No card named "${wanted}". Try /fs dials, context or panel.` }
   }
-  const card: Tab = isTab(wanted) ? wanted : ((await read($, tab)) ?? 'worktree')
+  const card: Tab = isTab(wanted) ? wanted : ((await read($, tab)) ?? DEFAULT_TAB)
   await update($, tab, () => card)
   const label = TABS.find(one => one.id === card)!.label
   // Where the pane docks, the card shows there, on the right.

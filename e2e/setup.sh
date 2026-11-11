@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # Builds the end-to-end fixture: a bare origin and a clone of it holding a
-# small JSON API and its openapi.json, with a lockfile and (ignored)
-# node_modules, nested ones too, for the slots to clone; plus settings that
-# point fishStack's worktree root into the fixture, start with Perm worktree
-# off (the run turns it on), and keep an installed fishStack out of the way.
+# small JSON API and its openapi.json, with a lockfile; plus settings that
+# make Autopilot quick and keep an installed fishStack out of the way.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -27,17 +25,12 @@ git -C "$root/app" add -A
 git -C "$root/app" -c user.name=fish -c user.email=fish@example.com commit -q -m "Workshop API"
 git -C "$root/app" push -q origin main
 
-# Dependencies as an install leaves them: ignored, root and nested.
-mkdir -p "$root/app/node_modules/left-pad" "$root/app/packages/api/node_modules/tiny"
-printf 'module.exports = s => s\n' > "$root/app/node_modules/left-pad/index.js"
-printf 'module.exports = 1\n' > "$root/app/packages/api/node_modules/tiny/index.js"
-
 cat > "$root/settings.json" <<JSON
 {
   "enabledPlugins": { "fishstack@claude-fish-stack-mod": false },
   "pluginConfigs": {
-    "fishstack": { "options": { "autoWorktree": false, "worktreeRoot": "$root/slots", "setupCommand": "sleep ${FISH_SETUP_SECONDS:-4}", "minFreeGb": 0, "autoAnswerMinutes": 0.1 } },
-    "fishstack@inline": { "options": { "autoWorktree": false, "worktreeRoot": "$root/slots", "setupCommand": "sleep ${FISH_SETUP_SECONDS:-4}", "minFreeGb": 0, "autoAnswerMinutes": 0.1 } }
+    "fishstack": { "options": { "autoAnswerMinutes": 0.1 } },
+    "fishstack@inline": { "options": { "autoAnswerMinutes": 0.1 } }
   }
 }
 JSON

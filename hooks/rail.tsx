@@ -1,6 +1,6 @@
-// The rail above the prompt, unless the worktree failed: fishStack's
-// status at a glance (context window, prompt cache, cost, dials, sources,
-// worktree), each item opening its tab. worktree.tsx gathers the figures.
+// The rail above the prompt: fishStack's status at a glance (context
+// window, prompt cache, cost, dials, sources), each item opening its tab.
+// band.tsx gathers the figures.
 import type { RenderElement } from 'claude-code'
 
 import type { Tab } from '../types'
@@ -23,9 +23,6 @@ export type RailFigures = {
   presetLevels: number[]
   sourcesOn: number
   sourcesTotal: number
-  branch: string | null
-  // While the worktree is made, the step it is on; null once ready or off.
-  preparingStep: string | null
   autopilot: RailAutopilot | null
   isDialsOn: boolean
   isContextOn: boolean
@@ -163,7 +160,6 @@ export function drawRail(ui: Ui, figures: RailFigures, open: (tab: Tab | null) =
             {figures.costUsd !== null && <Text dimColor>{figures.tokens !== null ? ' · ' : ''}≈ ${figures.costUsd.toFixed(2)} API price</Text>}
           </Text>,
         )}
-      {part('rail-worktree', 'worktree', '⎇')}
       {part('rail-dials', 'dials', '◇')}
       {part('rail-sources', 'context', '▤')}
     </Box>

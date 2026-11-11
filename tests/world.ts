@@ -17,10 +17,6 @@ export type World = {
   commands: string[]
   // How each of them was run (its timeout and environment), by `cwd$ argv`.
   inits: Record<string, { timeoutMs?: number; env?: Record<string, string> } | undefined>
-  // Slots with uncommitted work, by path.
-  dirty: Set<string>
-  // Worktrees with a commit no other branch or remote holds, by path.
-  ahead: Set<string>
   // Answers the question the agent is waiting on, as the person would.
   answer: (answers: Record<string, string>) => void
   // Every question asked through AskUserQuestion, by text.
@@ -37,18 +33,8 @@ export type World = {
   written: string[]
   // What the store holds now: a test writes here as another session would.
   kept: Record<string, unknown>
-  // With isMoveHeld, confirms the held EnterWorktree, as the person would.
-  confirmMove: () => void
   // Every prompt submitted, fishStack's own among them, by text.
   prompts: string[]
-  // With isSetupHeld, lets every held setup command finish.
-  finishSetup: () => void
-  // With fetch 'held', lets the held fetches of origin finish.
-  finishFetches: () => void
-  // With fetch 'held', lets every fetch finish and the claim and the pool's
-  // warming run to their end (each waits out the other's lock), so nothing
-  // is left running past the test.
-  drain: () => Promise<void>
 }
 
 function ran(stdout = '', exitCode = 0, stderr = '') {
@@ -64,39 +50,15 @@ export function world(
     isDialogSlow = false,
     store = {},
     files,
-    nodeModules = {},
-    slots = [],
-    onBranch = {},
-    branches = [],
-    isCheckoutCut = false,
     folders = [],
-    isMoveHeld = false,
-    isSetupHeld = false,
-    fetch = 'quick',
     surfaces = ['terminal'],
   }: {
     isRepo?: boolean
     isDialogSlow?: boolean
     store?: Record<string, unknown>
     files?: Record<string, string>
-    nodeModules?: Record<string, string[]>
-    // Worktrees already made, by path, detached.
-    slots?: string[]
-    // Of those, the ones a branch is out in: path to branch.
-    onBranch?: Record<string, string>
-    // Branches that exist with no worktree on them.
-    branches?: string[]
-    // A new worktree's checkout is cut short, as a timeout cuts it.
-    isCheckoutCut?: boolean
     // Folders already on disk, by path.
     folders?: string[]
-    // EnterWorktree waits for state.confirmMove, as Claude Code's dialog does.
-    isMoveHeld?: boolean
-    // The setup command runs until state.finishSetup.
-    isSetupHeld?: boolean
-    // How fetching origin goes: at once; held until state.finishFetches; or
-    // still running at its timeout, so the call rejects.
-    fetch?: 'quick' | 'held' | 'stuck'
     // The surfaces the session reports; none while it is headless.
     surfaces?: string[]
   } = {},
@@ -121,16 +83,7 @@ export function world(
   const fetched: string[] = []
   const panes: string[] = []
   const commands: string[] = []
-  const dirty = new Set<string>()
-  const ahead = new Set<string>()
-  const state: World = { clock, toolCalls, fetched, dialogs: 0, closeDialog: () => undefined, panes, commands, inits: {}, dirty, ahead, answer: () => undefined, asked: [], askedWith: [], notified: [], notices: [], saved: {}, written: [], kept, confirmMove: () => undefined, prompts: [], finishSetup: () => heldSetups.splice(0).forEach(finish => finish()), finishFetches: () => heldFetches.splice(0).forEach(finish => finish()), drain: async () => {
-    for (let tries = 0; tries < 10; tries++) {
-      state.finishFetches()
-      await clock.advance(200)
-    }
-  } }
-  const heldSetups: (() => void)[] = []
-  const heldFetches: (() => void)[] = []
+  const state: World = { clock, toolCalls, fetched, dialogs: 0, closeDialog: () => undefined, panes, commands, inits: {}, answer: () => undefined, asked: [], askedWith: [], notified: [], notices: [], saved: {}, written: [], kept, prompts: [] }
 
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('prompt.submit', ($, e) => {
@@ -182,18 +135,13 @@ export function world(
     fetched.push(e.url)
     return { value: { status: 200, ok: true, headers: { 'content-type': 'application/json' }, text: '[{"id":1}]' } }
   })
-  // The disk and git beneath the slots, as far as fishStack touches them: the
-  // folders made, the worktrees git knows and the branch each has out.
+  // The folders on disk, as far as fishStack touches them.
   const dirs = new Set<string>([REPO])
-  const worktrees = new Map<string, string | null>([[REPO, 'main']])
   const parentOf = (path: string) => path.slice(0, path.lastIndexOf('/'))
   const makeDir = (path: string) => {
     for (let at = path; at.length > 1; at = parentOf(at)) dirs.add(at)
   }
-  for (const path of [...slots, ...folders]) makeDir(path)
-  for (const path of slots) worktrees.set(path, onBranch[path] ?? null)
-  const refs = new Set<string>(['main', ...branches, ...Object.values(onBranch)])
-  const excluded = new Set<string>()
+  for (const path of folders) makeDir(path)
   on('process.run', ($, e) => {
     const argv = e.argv
     const command = argv.join(' ')
@@ -218,110 +166,18 @@ export function world(
       for (const one of [...dirs]) if (one === path || one.startsWith(`${path}/`)) dirs.delete(one)
       return ran()
     }
-    if (argv[0] === 'mv') {
-      const [from, to] = [argv[1]!, argv[2]!]
-      for (const one of [...dirs]) {
-        if (one !== from && !one.startsWith(`${from}/`)) continue
-        dirs.delete(one)
-        dirs.add(to + one.slice(from.length))
-      }
-      makeDir(to)
-      return ran()
-    }
-    if (argv[0] === 'cp') {
-      makeDir(argv[argv.length - 1]!)
-      return ran()
-    }
-    if (argv[0] === 'df') return ran('Filesystem 1024-blocks Used Available Capacity Mounted\n/dev/disk3 1 1 900000000 1% /\n')
-    if (argv[0] === 'find' && argv.includes('-mindepth')) {
-      const dir = argv[1]!
-      if (!dirs.has(dir)) return ran('', 1)
-      return ran([...dirs].filter(one => parentOf(one) === dir).join('\n'))
-    }
-    if (argv[0] === 'find') return ran((nodeModules[argv[1]!] ?? []).map(one => `${argv[1]}/${one}`).join('\n'))
-    // A line appended to the main checkout's info/exclude.
-    if (argv[0] === '/bin/bash' && argv[1] === '-c' && argv[4] === `${REPO}/.git/info/exclude`) excluded.add(argv[5]!)
-    if (argv[0] === '/bin/bash') {
-      if (!isSetupHeld || argv[1] !== '-lc') return ran()
-      return new Promise<ReturnType<typeof ran>>(resolve => heldSetups.push(() => resolve(ran())))
-    }
     if (argv[0] !== 'git') return ran('', 1)
     // Git, its -c settings set aside.
     const args = argv.slice(1).filter((one, index, all) => one !== '-c' && all[index - 1] !== '-c')
     const sub = args.join(' ')
-    // A worktree's top level is its own folder; every one shares /repo/.git.
-    if (sub === 'rev-parse --show-toplevel') return ran(`${cwd.startsWith(`${REPO}/.claude/worktrees/`) || cwd.startsWith('/slots/') || cwd.startsWith('/other/') ? cwd : REPO}\n`)
+    // The main checkout's git data, which settings.repoMain asks for.
     if (sub === 'rev-parse --path-format=absolute --git-common-dir') return ran(`${REPO}/.git\n`)
-    if (sub === 'rev-parse --path-format=absolute --git-path info/exclude') return ran(`${REPO}/.git/info/exclude\n`)
-    // Nothing in /repo is ignored but what fishStack excluded.
-    if (sub.startsWith('check-ignore -q ')) return ran('', excluded.has(`/${args[2]}`) ? 0 : 1)
-    if (sub === 'symbolic-ref --short refs/remotes/origin/HEAD') return ran('origin/main\n')
-    if (sub === 'fetch -q origin main' && fetch === 'stuck') return Promise.reject(new Error('git aborted: still running after 120000ms'))
-    if (sub === 'fetch -q origin main' && fetch === 'held') return new Promise<ReturnType<typeof ran>>(resolve => heldFetches.push(() => resolve(ran())))
-    if (sub === 'fetch -q origin main') return ran()
-    if (sub === 'rev-parse origin/main') return ran('0123456789abcdef\n')
-    if (sub === 'rev-parse main') return ran('fedcba9876543210\n')
-    if (sub === 'worktree list --porcelain') {
-      return ran([...worktrees].map(([path, branch]) => `worktree ${path}\n${branch === null ? 'detached' : `branch refs/heads/${branch}`}`).join('\n\n') + '\n')
-    }
-    // Prune forgets the worktrees whose folders are gone.
-    if (sub === 'worktree prune') {
-      for (const path of [...worktrees.keys()]) if (!dirs.has(path)) worktrees.delete(path)
-      return ran()
-    }
-    if (sub.startsWith('worktree add -q --detach --no-checkout ')) {
-      makeDir(args[5]!)
-      worktrees.set(args[5]!, null)
-      return ran()
-    }
-    if (sub.startsWith('worktree remove --force --force ')) {
-      const path = args[4]!
-      worktrees.delete(path)
-      for (const one of [...dirs]) if (one === path || one.startsWith(`${path}/`)) dirs.delete(one)
-      return ran()
-    }
-    if (sub === 'reset --hard -q' && isCheckoutCut) return ran('', 1, 'error: the checkout was cut short\n')
-    // As git 2.43 on: -B refuses a branch another worktree has out.
-    if (sub.startsWith('checkout -q -B ')) {
-      const branch = args[3]!
-      const holder = [...worktrees].find(([path, one]) => one === branch && path !== cwd)?.[0]
-      if (holder !== undefined) return ran('', 128, `fatal: '${branch}' is already used by worktree at '${holder}'\n`)
-      worktrees.set(cwd, branch)
-      refs.add(branch)
-      return ran()
-    }
-    if (sub.startsWith('rev-parse --verify --quiet refs/heads/')) return ran('', refs.has(args[3]!.slice('refs/heads/'.length)) ? 0 : 1)
-    if (sub === 'rev-parse --abbrev-ref HEAD') {
-      const branch = worktrees.get(cwd)
-      return ran(`${typeof branch === 'string' ? branch : 'HEAD'}\n`)
-    }
-    if (sub === 'symbolic-ref --short -q HEAD') {
-      const branch = worktrees.get(cwd)
-      return typeof branch === 'string' ? ran(`${branch}\n`) : ran('', 1)
-    }
-    if (sub === 'checkout -q --detach') {
-      worktrees.set(cwd, null)
-      return ran()
-    }
-    if (sub === 'checkout -q --detach HEAD') {
-      worktrees.set(cwd, null)
-      dirty.delete(cwd)
-      return ran()
-    }
-    if (sub.startsWith('status')) return ran(dirty.has(cwd) ? ' M a.ts\n' : '')
-    if (sub.startsWith('rev-list -n 1 HEAD --not ')) return ran(ahead.has(cwd) ? 'c0ffee\n' : '')
-    if (sub === 'stash create') return ran('5ta5h\n')
-    if (sub.startsWith('hash-object ')) return ran('10ck\n')
-    if (['reset --hard -q', 'clean -fdq', 'add -A'].includes(sub) || sub.startsWith('update-ref ')) return ran()
     return ran('', 1)
   })
   on('tool.call', ($, e) => {
     toolCalls.push(String(e.tool))
     // A question waits for the person, as the dialog does, until the test
     // answers it with state.answer.
-    if (String(e.tool) === 'EnterWorktree' && isMoveHeld) {
-      return new Promise(resolve => (state.confirmMove = () => resolve({ result: 'ok' } as never)))
-    }
     if (String(e.tool) === 'AskUserQuestion') {
       const asked = (e as unknown as { questions: { question: string }[] }).questions
       state.asked.push(...asked.map(one => one.question))
@@ -356,7 +212,7 @@ export const PANE_PROPS: RenderPropsOf['Pane'] = {
 }
 
 
-// The band above the prompt: with no worktree news, fishStack's rail.
+// The band above the prompt: fishStack's rail.
 export async function mountBand($: Engine, surface: 'terminal' | 'desktop') {
   return $.ui.mount({
     plugin: 'fishstack',
@@ -397,25 +253,9 @@ export async function activate(ui: Pressable, key: string): Promise<void> {
 
 // Opens the pane's card `id` as a person would, pressing its head, unless it
 // is open already: a second press on an open card's head closes it.
-export async function openCard(ui: Pressable & Pick<Drawing, 'find'>, id: 'worktree' | 'dials' | 'context'): Promise<void> {
+export async function openCard(ui: Pressable & Pick<Drawing, 'find'>, id: 'dials' | 'context'): Promise<void> {
   if ((await ui.find({ key: `body-${id}` })) !== undefined) return
   await activate(ui, `tab-${id}`)
-}
-
-// Shows the worktree card's pool, its slots and + Add slot, unless shown.
-export async function openPool(ui: Pressable & Pick<Drawing, 'find'>): Promise<void> {
-  await openCard(ui, 'worktree')
-  if ((await ui.find({ key: 'pool-add' })) !== undefined) return
-  await ui.press({ key: 'slots-toggle' })
-}
-
-// How a person moves a session into a worktree: opens the Worktree card and
-// presses Create worktree now. Nothing else moves it.
-export async function claimWorktree($: Engine, surface: 'terminal' | 'desktop' = 'desktop'): Promise<void> {
-  const ui = await mountPane($, surface)
-  await openCard(ui, 'worktree')
-  await activate(ui, 'worktree-create')
-  await ui.unmount()
 }
 
 // The keys of the controls, Buttons or drawn, whose key matches.

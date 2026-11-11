@@ -11,17 +11,17 @@ async function told($: Engine) {
   return (await $.prompt.compose(COMPOSE)).sections.find(section => section.id === 'fishstack:dials')?.text ?? ''
 }
 
-async function isAutoShown($: Engine) {
+async function isContextOnShown($: Engine) {
   const pane = await mountPane($, 'desktop')
-  await openCard(pane, 'worktree')
-  return JSON.stringify(await pane.drawn()).includes('"alt":"Use worktrees: on"')
+  await openCard(pane, 'context')
+  return JSON.stringify(await pane.drawn()).includes('"alt":"Use context: on"')
 }
 
-test("the first session after the rename brings Craftshop's saved dials and Perm worktree switch over", async ($, on) => {
+test("the first session after the rename brings Craftshop's saved dials and switches over", async ($, on) => {
   world(on, {
     isRepo: false,
     files: {
-      [`${STORE}/craft-shop_inline-0bc5373396bb.json`]: JSON.stringify({ dials: SAVED, [`context:${REPO}`]: { sources: [], folders: [] }, autoWorktree: true }),
+      [`${STORE}/craft-shop_inline-0bc5373396bb.json`]: JSON.stringify({ dials: SAVED, [`context:${REPO}`]: { sources: [], folders: [] }, useContext: false }),
       // Another plugin's store is left alone.
       [`${STORE}/someone-else_inline-1.json`]: JSON.stringify({ dials: { ...SAVED, foresight: 5 } }),
     },
@@ -29,21 +29,21 @@ test("the first session after the rename brings Craftshop's saved dials and Perm
   await startSession($)
   expect(await told($)).toContain('Foresight (Dive in)')
   expect(await told($)).toContain('Crew (Solo)')
-  expect(await isAutoShown($)).toBe(true)
+  expect(await isContextOnShown($)).toBe(false)
 })
 
 test('a value fishStack already has is never overwritten, and a broken old file is skipped', async ($, on) => {
   world(on, {
     isRepo: false,
-    store: { autoWorktree: false },
+    store: { useContext: true },
     files: {
-      [`${STORE}/craft-shop_inline-a.json`]: JSON.stringify({ dials: SAVED, autoWorktree: true }),
+      [`${STORE}/craft-shop_inline-a.json`]: JSON.stringify({ dials: SAVED, useContext: false }),
       [`${STORE}/craft-shop_inline-b.json`]: '{ not json',
     },
   })
   await startSession($)
   expect(await told($)).toContain('Foresight (Dive in)')
-  expect(await isAutoShown($)).toBe(false)
+  expect(await isContextOnShown($)).toBe(true)
 })
 
 test('once migrated, a later session reads only what fishStack holds', async ($, on) => {

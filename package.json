@@ -1,12 +1,11 @@
 {
   "name": "claude-fish-stack-mod",
-  "version": "0.8.4",
-  "description": "fishStack: a Claude Code mod with a perm worktree head start, crew dials and a context library, in one pane and a status rail.",
+  "version": "0.9.0",
+  "description": "fishStack: a Claude Code mod with crew dials and a context library, in one pane and a status rail.",
   "keywords": [
     "claude-code",
     "claude-code-plugin",
     "claude-code-mod",
-    "worktree",
     "agents"
   ],
   "homepage": "https://github.com/patrick-lai/claude-fish-stack-mod#readme",

@@ -6,16 +6,10 @@
 #
 #   e2e/drive.sh            # needs tmux, node, python3 and a signed-in claude
 #
-# 1. Worktrees: the toggle warms a pool of three slots, node_modules
-#    cloned into each; a new session is read-only, then moves into a slot and
-#    its writes land there; the next session reuses that slot, its leftover
-#    work kept under refs/fish/backup/.
-# 2. Dials: pressing them changes what the agent says it was told, mid-turn
+# 1. Dials: pressing them changes what the agent says it was told, mid-turn
 #    too: changed while a tool runs, they reach the agent's next request.
-# 3. Context: a strict note reaches the agent.
-# 4. Claude Code's own worktrees (claude --worktree, the desktop's worktree
-#    option) come up in a fishStack slot.
-# 5. On Autopilot, a question nobody answers takes its recommended option
+# 2. Context: a strict note reaches the agent.
+# 3. On Autopilot, a question nobody answers takes its recommended option
 #    (the fixture waits 6 seconds, not 15 minutes).
 set -euo pipefail
 
@@ -68,13 +62,6 @@ start_claude() {
   sleep 1
 }
 
-# Moving into the worktree (EnterWorktree) resets the prompt, dropping keys
-# typed meanwhile: wait for the rail's worktree pill to name the slot's branch.
-wait_moved_in() {
-  approve_until 'screen | grep -q "⎇ fish/"' 60
-  sleep 2
-}
-
 quit_claude() {
   c idle fish 300
   c type fish '/exit'
@@ -82,9 +69,6 @@ quit_claude() {
   while tmux has-session -t fish 2>/dev/null && [ "$waited" -lt 20 ]; do sleep 1; waited=$((waited + 1)); done
   tmux kill-session -t fish 2>/dev/null || true
 }
-
-# Slots git knows under the fixture's root, and how many hold a file.
-slots() { git -C "$app" worktree list --porcelain | grep -c "^worktree .*/slots/" || true; }
 
 fixture="$("$here/setup.sh")"
 app="$fixture/app"
@@ -102,72 +86,22 @@ restore_store() {
 }
 trap restore_store EXIT
 
-# The toggle and the dials are kept in the --plugin-dir copy's own store
-# across runs: start each run with the toggle off (the run turns it on) and
-# the Quick dials (no subagents, short answers), so turns stay short. A
-# repository's own values (autoWorktree:<repo>) would win, so they go.
+# The dials are kept in the --plugin-dir copy's own store across runs:
+# start each run with the Quick dials (no subagents, short answers), so turns
+# stay short. A repository's own values (dials:<repo>) would win, so they go.
 python3 -I - <<'PY'
 import glob, json, os
 for path in glob.glob(os.path.expanduser('~/.claude/plugins/store/fishstack_inline-*.json')):
     data = json.load(open(path))
-    data = {key: value for key, value in data.items() if not key.startswith(('autoWorktree:', 'dials:'))}
-    data['autoWorktree'] = False
+    data = {key: value for key, value in data.items() if not key.startswith('dials:')}
     data['dials'] = {'foresight': 1, 'crew': 1, 'tenacity': 2, 'autonomy': 4, 'proof': 2, 'voice': 2}
     json.dump(data, open(path, 'w'))
 PY
 
-echo "1. Worktrees ($fixture)"
+echo "Fixture: $fixture"
 start_claude
-c type fish '/fishstack worktree'
-c wait fish 'Off: fishStack leaves worktrees' 15
-pass 'Use worktrees starts off'
-t0="$(now_ms)"
-c click fish '[ On ]' 2
-c wait fish 'On: new sessions' 10
-pass "the toggle turns on ($(took "$t0"))"
-approve_until '[ "$(slots)" -ge 3 ]' 180
-c wait fish 'Pool: 3 slots, 3 ready' 120
-pass "three slots are warmed in the background, setup included ($(took "$t0"), each with a ${FISH_SETUP_SECONDS:-4}s setup)"
-for n in 1 2 3; do
-  slot="$(ls -d "$fixture"/slots/*/"$n")"
-  [ -e "$slot/node_modules/left-pad/index.js" ] || fail "slot $n has no node_modules"
-  [ -e "$slot/packages/api/node_modules/tiny/index.js" ] || fail "slot $n has no nested node_modules"
-  [ -z "$(git -C "$slot" status --porcelain)" ] || fail "slot $n is not clean"
-done
-pass 'each slot has its node_modules cloned, nested ones too, and is clean'
-pass 'the tab shows the pool: 3 slots, 3 ready'
-c shot fish "$out/01-pool.ansi"
-quit_claude
 
-t0="$(now_ms)"
-start_claude
-approve_until 'git -C "$app" worktree list | grep -q "fish/"' 60
-claim="$(took "$t0")"
-first="$(git -C "$app" worktree list | grep 'fish/' | awk '{print $1}')"
-pass "a new session claims a warm slot ($claim from launch): $first"
-wait_moved_in
-pass "it moved in, ready to type, $(took "$t0") from launch"
-c type fish '/fishstack worktree'
-c wait fish '● Ready · fish/' 30
-pass 'the session moved into its worktree'
-c shot fish "$out/02-claimed.ansi"
-c ask fish 'Create a file hello.txt containing the line: hello from fishStack. Do not commit it.' 300
-approve_until '[ -e "$first/hello.txt" ]' 120
-[ ! -e "$app/hello.txt" ] || fail 'hello.txt landed in the main checkout'
-pass 'hello.txt landed in the slot, not the main checkout'
-approve_until '[ "$(slots)" -ge 3 ]' 60
-pass "the pool keeps a spare: $(slots) slots"
-quit_claude
-
-start_claude
-approve_until 'git -C "$app" worktree list | grep -c "fish/" | grep -q 1 && [ ! -e "$first/hello.txt" ]' 90
-[ -n "$(git -C "$app" for-each-ref refs/fish/backup)" ] || fail 'the leftover work was not backed up'
-pass 'the next session reused the slot: hello.txt kept under refs/fish/backup/, the slot clean'
-git -C "$app" show "$(git -C "$app" for-each-ref --format='%(objectname)' refs/fish/backup | head -1)" --stat | grep -q hello.txt || fail 'the backup does not hold hello.txt'
-pass 'the backup holds hello.txt'
-wait_moved_in
-
-echo '2. Crew dials'
+echo '1. Crew dials'
 t0="$(now_ms)"
 c type fish '/fishstack dials'
 c wait fish 'How the agent works' 10
@@ -198,7 +132,7 @@ c idle fish 300
 screen | grep -q 'Voice: Terse, Foresight: Write a spec' || fail 'the agent answered with the dials from before the change'
 pass 'changed mid-turn, the dials reached the agent before its next request'
 
-echo '3. Context library'
+echo '2. Context library'
 t0="$(now_ms)"
 c type fish '/fishstack context'
 c wait fish 'Context the agent reads' 10
@@ -216,7 +150,7 @@ c ask fish "What is the Workshop API's launch codename? Answer in two words." 30
 screen | grep -qi 'BLUE HERON' || fail 'the agent did not cite the strict note'
 pass 'the agent cites the strict note'
 
-echo '5. Autopilot answers when nobody does'
+echo '3. Autopilot answers when nobody does'
 c type fish '/fishstack dials'
 c click fish '[ Autopilot ]' 2
 tmux send-keys -t fish Escape
@@ -235,14 +169,6 @@ pass 'the rail says Autopilot picked Red for you'
 c type fish '/clear'
 c wait fish 'Dials Autopilot' 20
 pass 'after /clear the dials are still Autopilot'
-quit_claude
-
-echo "4. Claude Code's own worktree (claude --worktree)"
-t0="$(now_ms)"
-start_claude '--worktree feat-x'
-approve_until 'git -C "$app" worktree list | grep -q "/slots/.*\[fish/feat-x\]"' 60
-pass "claude --worktree came up in a fishStack slot on fish/feat-x ($(took "$t0"))"
-c shot fish "$out/05-claude-worktree.ansi"
 quit_claude
 
 echo 'All checks passed.'

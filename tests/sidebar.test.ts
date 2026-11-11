@@ -33,24 +33,12 @@ test('the sidebar draws each card on the desktop', async ($, on) => {
   await startSession($)
   const ui = await sidebar($)
   await show(ui, 'side-start')
-  await openCard(ui, 'worktree')
-  await show(ui, 'side-worktree-off')
   await openCard(ui, 'dials')
   await show(ui, 'side-dials')
   await openCard(ui, 'context')
   await ui.press({ key: 'pick-folder' })
   await ui.input({ key: 'add-input', text: 'Every endpoint returns JSON with snake_case keys.' })
   await show(ui, 'side-context')
-})
-
-test('the sidebar draws a ready worktree on the desktop', { options: { autoWorktree: true, worktreeRoot: '/slots', setupCommand: '' } }, async ($, on) => {
-  const { clock } = world(on)
-  await startSession($)
-  await clock.advance(1)
-  const ui = await sidebar($)
-  await openCard(ui, 'worktree')
-  await ui.redraw()
-  await show(ui, 'side-worktree-ready')
 })
 
 // The rail above the prompt on the desktop, its Dials item pressed: the card
